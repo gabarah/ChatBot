@@ -23,7 +23,7 @@ petal_width = st.sidebar.slider("Petal Width", float(df['petal width (cm)'].min(
 
 input_data = [[sepal_length, sepal_width, petal_length, petal_width]]
 prediction = model.predict(input_data)
-prediction_species = target_names[prediction][0]
+prediction_species = target_names[prediction[0]]
 
 st.title("Iris Flower Species Prediction")
 st.write("Based on the input features, the predicted species of the Iris flower is:")
