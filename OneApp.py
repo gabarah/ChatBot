@@ -1,6 +1,7 @@
 # app_hybrid_rag.py
 import os
 import streamlit as st
+import re
 from typing import List, Dict
 
 # LangChain + vectorstore + loaders
@@ -30,7 +31,9 @@ PDF_DIR = os.path.join(os.getcwd(), "pdfs")  # put your PDFs here
 INDEX_DIR = os.path.join(os.getcwd(), "index_faiss")
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 GEMMA_MODEL = "gemma2:2b"   # Ollama model name
-RETRIEVE_K = 4
+RETRIEVE_K = 7  # Increased default k value for more relevant chunks
+CHUNK_SIZE = 1500  # Increased chunk size for more context per chunk
+CHUNK_OVERLAP = 300  # Increased overlap to avoid splitting answers
 RESTRICTED_KEYWORDS = [
     "suicide", "self harm", "kill myself", "illegal drug", "terror", "bomb", 
     "politics", "vote", "election", "religion", "sex", "child sexual"
@@ -39,7 +42,7 @@ RESTRICTED_KEYWORDS = [
 
 st.set_page_config(page_title="Hybrid RAG Chat (Gemma2 + Ollama)", layout="wide")
 
-st.title("🔎 Hybrid RAG Chatbot (Local PDFs + Web) — Gemma2 via Ollama")
+st.title("DocuMind - By Rahul Gaba")
 st.markdown(
     """
     This app indexes PDF files from a `pdfs/` folder, retrieves relevant chunks via FAISS,
@@ -71,7 +74,7 @@ def ensure_index(pdf_dir: str, index_dir: str):
         except Exception as e:
             st.warning("Could not load existing index; rebuilding. Error: " + str(e))
 
-    # Build index
+    #Build index
     docs = []
     for root, _, files in os.walk(pdf_dir):
         for fn in files:
@@ -91,11 +94,28 @@ def ensure_index(pdf_dir: str, index_dir: str):
     if not docs:
         return None
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
     chunks = splitter.split_documents(docs)
 
+    def clean_text(text):
+        if not isinstance(text, str):
+            return ""
+        # Remove non-printable / weird characters
+        text = re.sub(r'[^A-Za-z0-9.,;:%\-\n() ]+', ' ', text)
+        # Normalize spaces
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
+
+    # Clean and filter chunks
+    valid_chunks = []
+    for c in chunks:
+        if hasattr(c, 'page_content') and isinstance(c.page_content, str) and c.page_content.strip():
+            c.page_content = clean_text(c.page_content)
+            if c.page_content:
+                valid_chunks.append(c)
+
     embeddings = get_embeddings()
-    vectordb = FAISS.from_documents(chunks, embeddings)
+    vectordb = FAISS.from_documents(valid_chunks, embeddings)
     # persist
     vectordb.save_local(index_dir)
     return vectordb
@@ -209,7 +229,7 @@ with st.sidebar:
                 st.error("No PDFs found or index build failed.")
     st.markdown("---")
     st.write("Search settings")
-    k = st.slider("Local retrieval (k)", min_value=1, max_value=10, value=RETRIEVE_K)
+    k = st.slider("Local retrieval (k)", min_value=1, max_value=20, value=RETRIEVE_K)
     use_web = st.checkbox("Enable web search (DuckDuckGo)", value=True)
     st.markdown("---")
     st.write("Safety")
@@ -241,7 +261,6 @@ if vectordb is None:
     st.info("No indexed PDFs found. Put PDF files inside ./pdfs and click (Re)build index.")
     st.stop()
 
-# input
 col1, col2 = st.columns([3,1])
 with col1:
     user_q = st.text_input("Ask a question (will use local PDFs):")
