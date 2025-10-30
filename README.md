@@ -13,3 +13,75 @@ In these we have shown how we can use
 6) Write a title
 
 7) Many more widgets or features can be accessed in streamlit.io
+
+
+===================================================================
+
+We can make the app visible to everyone like by hosting it on localhost and looking for the network url by calling ipconfig on cmd prompt and looking for ip4 address, anyone in the lan can access the link using that url, and people connected to that lan can even access rthe same on the mobile phones as well, you can mask the address to the named url by going into drivers/etc/hosts file and mapping the url to a name.
+
+
+What all things i did while making a chatbot
+1) I downloaded the ollama engine and downloaded the gemma2 model from it,
+this is required as it is the brain of the chatbot
+Gemma2 model made by Google deepmind which is lightweight need less processing powerr
+hence can be developed on individual's machine as well.
+
+2) So i needed langchain community modules for doing below things
+1) PyPdfLoader module comes from langchain community which is used to read the pdf the loader loads the pdf
+
+2) Late we use the splitters like RecursiveCharacterTextSplitter which is used to process on these loaded docs, we can also use other format loaders like json, txt etc.
+
+3) splitter provides the mechanism to split these documentrs into providerd chunk size and overlop size.
+
+4) Later we use the embedders which converts these chunks into decimal embeddings like HuggingFaceEmbedding and we use the embed model as sentence-transformers/all-MiniLM-L6-v2
+which transforms these texts into vector double values
+
+5) Later with the help of FAISS it uses the texts with embedder to crerate numberical vector
+text -> numerical vector
+creates a FAISS database where it stores these vector
+link each vector back to the text - so that you can retrieve the text later.
+
+6) You would then make a retriever out of the vector db where you can query a normal text
+which would be able to find the mappings in numerical vector and retrieve the k possible results.
+
+So basically inside retriever embedders also embedd the query into numerical vector FAISS index is searched 
+
+So once i get the top documents which are matching my query, it is yet not good enough to 
+send it to my llm model to return in a neat textual way to my chatbot
+
+Alternatively you can do a web searching as well , how ?
+
+from serpapi import GoogleSearch use this module 
+params = {
+   "engine" : "google"
+   "q" : query
+   "api_key" : serapiapikey
+}
+search = GoogleSearch(params)
+results = search.get_dict()
+then we format the result like title, snippet, url etc.
+
+We can also add a moderator what does that mean if the person is adding a filthy prompt it 
+can be upfront filtered by checking the language of it.
+
+For that we need a query and llm model for llm model we would use
+Ollama(model=gemma2:2b)
+you can import that from langchain community llms
+
+the moderator will prepoare a prompt which will itself say that if the query has any 
+content related to restricted questions reply BLOCK or allow and append the question to it
+then pass it to llm.invoke(prompt)
+kindly note the llm  = Ollama(model="gemma2:2b")
+
+then process the local_docs returned by the vectordb , websnippets processed using google search add them as a context to your main prompt and look for answer and pass it to llm.invoke(main_prompt)
+
+
+There are some useful streamlit functions like'
+
+streamlit.spinner
+streamlit.session_state.history.append({
+   "question" : user_q
+   "answer" : str(response to llm)
+   "local docs" : local_docs,
+   "web snipps" : web_snips
+})
