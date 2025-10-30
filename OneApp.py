@@ -32,8 +32,8 @@ INDEX_DIR = os.path.join(os.getcwd(), "index_faiss")
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 GEMMA_MODEL = "gemma2:2b"   # Ollama model name
 RETRIEVE_K = 7  # Increased default k value for more relevant chunks
-CHUNK_SIZE = 1500  # Increased chunk size for more context per chunk
-CHUNK_OVERLAP = 300  # Increased overlap to avoid splitting answers
+CHUNK_SIZE = 5000  # Increased chunk size for more context per chunk
+CHUNK_OVERLAP = 1000  # Increased overlap to avoid splitting answers
 RESTRICTED_KEYWORDS = [
     "suicide", "self harm", "kill myself", "illegal drug", "terror", "bomb", 
     "politics", "vote", "election", "religion", "sex", "child sexual"
@@ -46,7 +46,7 @@ st.title("DocuMind - By Rahul Gaba")
 st.markdown(
     """
     This app indexes PDF files from a `pdfs/` folder, retrieves relevant chunks via FAISS,
-    optionally searches the web (DuckDuckGo) for fresh info, and asks Gemma2 (Ollama) to answer.
+    optionally searches the web (GooglesSearch) for fresh info, and asks Gemma2 (Ollama) to answer.
     It also performs pre-filtering and LLM-based moderation to block restricted topics.
     """
 )
@@ -230,7 +230,7 @@ with st.sidebar:
     st.markdown("---")
     st.write("Search settings")
     k = st.slider("Local retrieval (k)", min_value=1, max_value=20, value=RETRIEVE_K)
-    use_web = st.checkbox("Enable web search (DuckDuckGo)", value=True)
+    use_web = st.checkbox("Enable web search (GooglesSearch)", value=False)
     st.markdown("---")
     st.write("Safety")
     st.write("Restricted keywords (basic):")
