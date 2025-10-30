@@ -20,9 +20,12 @@ from langchain_community.vectorstores import FAISS
 # 🔹 Ollama and all LLMs are now in langchain_community.llms
 from langchain_community.llms import Ollama
 
-
 # web search fallback
 from serpapi import GoogleSearch
+
+#Imports for the agents
+from langchain.agents import initialize_agent, Tool
+from langchain_community.tools import PythonREPLTool
 
 # ---------------------------
 # CONFIG
@@ -40,9 +43,9 @@ RESTRICTED_KEYWORDS = [
 ]
 # ---------------------------
 
-st.set_page_config(page_title="Hybrid RAG Chat (Gemma2 + Ollama)", layout="wide")
+st.set_page_config(page_title="DocuMind Agent", layout="wide")
 
-st.title("DocuMind - By Rahul Gaba")
+st.title("DocuMindAgent")
 st.markdown(
     """
     This app indexes PDF files from a `pdfs/` folder, retrieves relevant chunks via FAISS,
@@ -54,6 +57,12 @@ st.markdown(
 # ---------------------------
 # Utilities
 # ---------------------------
+
+def retrieve_from_pdfs(vectordb: FAISS, query: str):
+    retriever = vectordb.as_retriever(search_kwargs={"k": 5})
+    results = retriever.invoke(query)
+    return "\n\n".join([r.page_content for r in results])
+
 @st.cache_resource
 def get_embeddings():
     return HuggingFaceEmbeddings(model_name=EMBED_MODEL)
@@ -279,47 +288,51 @@ with col2:
                 if blocked:
                     st.error("This question is blocked by the safety moderator.")
                 else:
-                    # 3) Retrieval: local
-                    retriever = vectordb.as_retriever(search_kwargs={"k": k})
-                    local_docs = retriever.invoke(user_q)
-
-                    # # 4) Web search (optional)
-                    web_snips = []
-                    if use_web:
-                      web_snips = web_search_snippets(user_q)
-
-                    # 5) Compose prompt and call LLM
-                    prompt = build_prompt(user_q, local_docs, web_snips)
-                    with st.spinner("Thinking..."):
+                    python_tool = PythonREPLTool()
+                    tools = [
+                        Tool(
+                            name="Local PDF Retriever",
+                            func=retrieve_from_pdfs,
+                            description="Fetches relevant content from locally stored PDFs to answer questions."
+                        ),
+                        Tool(
+                            name="Web Search",
+                            func=web_search_snippets,
+                            description="Fetches the latest information from Google search results."
+                        ),
+                        Tool(
+                            name="Python Executor",
+                            func=python_tool.run,
+                            description="Executes Python code to perform calculations or generate charts."
+                        )
+                    ]
+                    # Initialize your agent once
+                    agent = initialize_agent(
+                        tools=tools,
+                        llm=get_llm(),
+                        agent_type="zero-shot-react-description",
+                        verbose=True
+                    )
+                    with st.spinner("Thinking (agent reasoning)..."):
                         try:
-                            resp = llm.invoke(prompt)
-                            answer = str(resp)
+                            response = agent.invoke(user_q)
+                            answer = str(response["output"]) if isinstance(response, dict) and "output" in response else str(response)
                         except Exception as e:
-                            answer = f"LLM error: {e}"
+                            answer = f"Agent error: {e}"
 
-                    # 6) record and display
-                    st.session_state.history.append({
-                        "question": user_q,
-                        "answer": answer,
-                        "local_docs": local_docs,
-                        "web_snips": web_snips
-                    })
+                        st.session_state.history.append({
+                            "question": user_q,
+                            "answer": answer,
+                            "intermediate_steps": response.get("intermediate_steps", [])
+                        })
 
 # show chat history
 for entry in reversed(st.session_state.history[-10:]):
     st.markdown(f"**Q:** {entry['question']}")
     st.markdown(f"**A:** {entry['answer']}")
     # show top sources
-    if entry["local_docs"]:
-        st.markdown("**Local sources used:**")
-        for i, d in enumerate(entry["local_docs"][:3], 1):
-            src = d.metadata.get("source","unknown")
-            snippet = d.page_content[:300].replace("\n"," ")
-            st.markdown(f"- [LOCAL {i}] `{src}` — {snippet}...")
-    if entry["web_snips"]:
-        st.markdown("**Web results used:**")
-        for i, s in enumerate(entry["web_snips"][:3], 1):
-            st.markdown(f"- [WEB {i}] {s.get('title')} — {s.get('url')}")
-
+    for step in entry.get("intermediate_steps", []):
+        st.markdown(f"**Tool Used:** {step[0]}")
+        st.code(step[1])
 st.markdown("---")
-st.caption("Hybrid RAG demo — Model runs via Ollama local server. All local PDFs never leave your machine.")
+st.caption("DocuMind AI Agent -By Rahul Gaba")

@@ -42,7 +42,7 @@ RESTRICTED_KEYWORDS = [
 
 st.set_page_config(page_title="Hybrid RAG Chat (Gemma2 + Ollama)", layout="wide")
 
-st.title("DocuMind - By Rahul Gaba")
+st.title("DocuMindBot")
 st.markdown(
     """
     This app indexes PDF files from a `pdfs/` folder, retrieves relevant chunks via FAISS,
